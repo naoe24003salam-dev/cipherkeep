@@ -24,6 +24,7 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
   bool _biometricEnabled = true;
 
   Future<void> _changeRealPin() async {
+    final currentPinController = TextEditingController();
     final controller1 = TextEditingController();
     final controller2 = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -38,13 +39,23 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
+                controller: currentPinController,
+                decoration: const InputDecoration(labelText: 'Current Real PIN'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                validator: (v) =>
+                    v?.length == 6 ? null : 'PIN must be 6 digits',
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
                 controller: controller1,
                 decoration: const InputDecoration(labelText: 'New Real PIN'),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: 6,
                 validator: (v) =>
-                    v?.length == 4 ? null : 'PIN must be 4 digits',
+                    v?.length == 6 ? null : 'PIN must be 6 digits',
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -53,7 +64,7 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
                     const InputDecoration(labelText: 'Confirm Real PIN'),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: 6,
                 validator: (v) =>
                     v == controller1.text ? null : 'PINs do not match',
               ),
@@ -66,9 +77,21 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(context, true);
+                // Verify current PIN
+                final authResult = await ref
+                    .read(authProvider.notifier)
+                    .authenticateWithPin(currentPinController.text);
+                if (authResult.success) {
+                  Navigator.pop(context, true);
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(authResult.errorMessage ?? 'Invalid PIN')),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Change'),
@@ -88,6 +111,7 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
   }
 
   Future<void> _changeGhostPin() async {
+    final currentPinController = TextEditingController();
     final controller1 = TextEditingController();
     final controller2 = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -102,13 +126,23 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextFormField(
+                controller: currentPinController,
+                decoration: const InputDecoration(labelText: 'Current Ghost PIN'),
+                keyboardType: TextInputType.number,
+                obscureText: true,
+                maxLength: 6,
+                validator: (v) =>
+                    v?.length == 6 ? null : 'PIN must be 6 digits',
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
                 controller: controller1,
                 decoration: const InputDecoration(labelText: 'New Ghost PIN'),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: 6,
                 validator: (v) =>
-                    v?.length == 4 ? null : 'PIN must be 4 digits',
+                    v?.length == 6 ? null : 'PIN must be 6 digits',
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -117,7 +151,7 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
                     const InputDecoration(labelText: 'Confirm Ghost PIN'),
                 keyboardType: TextInputType.number,
                 obscureText: true,
-                maxLength: 4,
+                maxLength: 6,
                 validator: (v) =>
                     v == controller1.text ? null : 'PINs do not match',
               ),
@@ -130,9 +164,21 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               if (formKey.currentState?.validate() ?? false) {
-                Navigator.pop(context, true);
+                // Verify current PIN
+                final authResult = await ref
+                    .read(authProvider.notifier)
+                    .authenticateWithPin(currentPinController.text);
+                if (authResult.success) {
+                  Navigator.pop(context, true);
+                } else {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(authResult.errorMessage ?? 'Invalid PIN')),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Change'),
@@ -163,20 +209,71 @@ class _VaultSettingsScreenState extends ConsumerState<VaultSettingsScreen> {
       };
 
       final jsonString = const JsonEncoder.withIndent('  ').convert(exportData);
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File(
-          '${dir.path}/cypherkeep_backup_${DateTime.now().millisecondsSinceEpoch}.json');
-      await file.writeAsString(jsonString);
-
-      await Share.shareXFiles(
-        [XFile(file.path)],
-        subject: 'CypherKeep Vault Backup',
+      
+      // Show export options dialog
+      final exportOption = await showDialog<String>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Export Vault'),
+          content: const Text('Choose export method:'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'share'),
+              child: const Text('Share to App'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, 'save'),
+              child: const Text('Save to Downloads'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+          ],
+        ),
       );
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Vault exported successfully')),
+      if (exportOption == null) return;
+
+      final fileName = 'cypherkeep_backup_${DateTime.now().millisecondsSinceEpoch}.json';
+
+      if (exportOption == 'save') {
+        // Save to Downloads folder
+        final dir = Directory('/storage/emulated/0/Download');
+        if (!await dir.exists()) {
+          final docDir = await getApplicationDocumentsDirectory();
+          final file = File('${docDir.path}/$fileName');
+          await file.writeAsString(jsonString);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Saved to: ${file.path}')),
+            );
+          }
+        } else {
+          final file = File('${dir.path}/$fileName');
+          await file.writeAsString(jsonString);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Vault saved to Downloads folder')),
+            );
+          }
+        }
+      } else if (exportOption == 'share') {
+        // Share via any app
+        final dir = await getApplicationDocumentsDirectory();
+        final file = File('${dir.path}/$fileName');
+        await file.writeAsString(jsonString);
+
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          subject: 'CypherKeep Vault Backup',
         );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Vault exported successfully')),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

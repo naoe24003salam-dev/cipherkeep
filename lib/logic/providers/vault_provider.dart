@@ -42,15 +42,10 @@ final vaultProvider = StateNotifierProvider<VaultNotifier, VaultState>((ref) {
 class VaultNotifier extends StateNotifier<VaultState> {
   final _hiveService = HiveService();
   final _uuid = const Uuid();
-  String? _currentPin;
 
   VaultNotifier()
       : super(VaultState(notes: [], passwords: [], encodedImages: [])) {
     _loadData();
-  }
-
-  void setPin(String pin) {
-    _currentPin = pin;
   }
 
   void _loadData() {
@@ -77,8 +72,6 @@ class VaultNotifier extends StateNotifier<VaultState> {
   // ============= Secure Notes =============
 
   Future<void> addNote(String title, String content) async {
-    if (_currentPin == null) throw Exception('PIN not set');
-
     final note = SecureNote(
       id: _uuid.v4(),
       title: title,
@@ -126,8 +119,6 @@ class VaultNotifier extends StateNotifier<VaultState> {
 
   Future<void> addPassword(String site, String username, String password,
       {String? notes}) async {
-    if (_currentPin == null) throw Exception('PIN not set');
-
     final entry = PasswordEntry(
       id: _uuid.v4(),
       title: site,
